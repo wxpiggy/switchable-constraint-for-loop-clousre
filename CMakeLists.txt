@@ -7,13 +7,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 find_package(Eigen3 REQUIRED)
 
-find_package(Sophus REQUIRED)
-include_directories(${Sophus_INCLUDE_DIRS})
-
+# find_package(Sophus REQUIRED)
+# include_directories(${Sophus_INCLUDE_DIRS})
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/Sophus)
 find_package(Ceres REQUIRED)
 include_directories(${CERES_INCLUDE_DIRS})
 
 add_executable(a main.cc)
 target_link_libraries(a
-  ${CERES_LIBRARIES} ${Sophus_LIBRARIES})
+  ${CERES_LIBRARIES} )
 

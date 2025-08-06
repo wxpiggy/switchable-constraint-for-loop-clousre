@@ -53,7 +53,7 @@ struct OdometryFunctor {
     Eigen::Map<const Sophus::SE3<T>> t_j(t_j_ptr);
     Eigen::Map<Eigen::Matrix<T, 6, 1>> residual(residual_ptr);
 
-    residual = (t_i * t_ij.template cast<T>() * t_j.inverse()).log();
+    residual = T(0.1) * (t_i * t_ij.template cast<T>() * t_j.inverse()).log();
     return true;
   }
 
@@ -90,6 +90,30 @@ struct LoopClosureFunctor {
 
   Sophus::SE3d t_mn;
 };
+struct LoopClosure {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  LoopClosure(Sophus::SE3d t_mn) : t_mn(t_mn) {}
+
+  template<typename T>
+  bool operator()(const T *t_m_ptr,
+                  const T *t_n_ptr,
+                  T *residual_ptr) const {
+    Eigen::Map<const Sophus::SE3<T>> t_m(t_m_ptr);
+    Eigen::Map<const Sophus::SE3<T>> t_n(t_n_ptr);
+    Eigen::Map<Eigen::Matrix<T, 6, 1>> residual(residual_ptr);
+
+    residual =
+         (t_m * t_mn.template cast<T>() * t_n.inverse()).log();
+    return true;
+  }
+
+  static ceres::CostFunction *Creat(const Sophus::SE3d t_mn) {
+    return (new ceres::AutoDiffCostFunction<LoopClosure, 6, 7, 7>(
+        new LoopClosure(t_mn)));
+  }
+
+  Sophus::SE3d t_mn;
+};
 
 struct PriorFunctor {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -97,7 +121,7 @@ struct PriorFunctor {
 
   template<typename T>
   bool operator()(const T *s_ptr, T *residual_ptr) const {
-    residual_ptr[0] = T(gamma) - *s_ptr;
+    residual_ptr[0] =   T(gamma) - *s_ptr;
     return true;
   }
 

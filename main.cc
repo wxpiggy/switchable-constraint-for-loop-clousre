@@ -21,7 +21,6 @@ Sophus::SE3d ReadEdge(std::ifstream *fin) {
   double information;
   for (int i = 0; i < 21; i++){
      *fin >> information ;
-     information = information / 10;
   }
    
   return pose;
@@ -33,7 +32,7 @@ int main(int argc, char **argv) {
   std::vector<std::pair<std::pair<int, int>, Sophus::SE3d>, sophus_allocator>
       edges;
 
-  std::ifstream fin("../test.g2o");
+  std::ifstream fin("../new.g2o");
   if (!fin.is_open()) {
     std::cerr << "Failed to open file ../test.g2o" << std::endl;
     return -1;
@@ -112,22 +111,32 @@ int main(int argc, char **argv) {
 
     if (i + 1 == j) {
       ceres::CostFunction *cost_function = OdometryFunctor::Creat(edge);
-      problem.AddResidualBlock(cost_function, new ceres::HuberLoss(1.0), pose_i.data(), pose_j.data());
+      problem.AddResidualBlock(cost_function, NULL, pose_i.data(), pose_j.data());
     } else {
-      ceres::CostFunction *cost_function = LoopClosureFunctor::Creat(edge);
-      problem.AddResidualBlock(cost_function,
-                               new ceres::HuberLoss(1.0),
-                               pose_i.data(),
-                               pose_j.data(),
-                               &v_s[loop_idx]);
+      if(0){//1 for prior, 0 for original loop
+        ceres::CostFunction *cost_function = LoopClosureFunctor::Creat(edge);
+        problem.AddResidualBlock(cost_function,
+                                 new ceres::HuberLoss(0.1),
+                                pose_i.data(),
+                                pose_j.data(),
+                                &v_s[loop_idx]);
 
-      ceres::CostFunction *cost_function1 = PriorFunctor::Create(v_gamma[loop_idx]);
-      problem.AddResidualBlock(cost_function1, NULL, &v_s[loop_idx]);
+        ceres::CostFunction *cost_function1 = PriorFunctor::Create(v_gamma[loop_idx]);
+        problem.AddResidualBlock(cost_function1, NULL, &v_s[loop_idx]);
 
-      problem.SetParameterLowerBound(&v_s[loop_idx], 0, 0.0);
-      problem.SetParameterUpperBound(&v_s[loop_idx], 0, 1.0);
+        problem.SetParameterLowerBound(&v_s[loop_idx], 0, 0.0);
+        problem.SetParameterUpperBound(&v_s[loop_idx], 0, 1.0);
 
-      loop_idx++;
+        loop_idx++;
+      }else{
+        ceres::CostFunction *cost_function = LoopClosure::Creat(edge);
+        problem.AddResidualBlock(cost_function,
+                                 new ceres::HuberLoss(0.1),
+                                //  new ceres::HuberLoss(1.0),
+                                 pose_i.data(),
+                                 pose_j.data());
+        loop_idx++;
+      }
     }
   }
 
@@ -139,7 +148,7 @@ int main(int argc, char **argv) {
 
   ceres::Solver::Options options;
   options.minimizer_progress_to_stdout = true;
-  options.max_num_iterations = 5;
+  options.max_num_iterations = 50;
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
   std::cout << summary.FullReport() << std::endl;
@@ -158,7 +167,10 @@ int main(int argc, char **argv) {
   // 输出优化后的回环开关变量
   std::cout << "Optimized loop closure switches (s):" << std::endl;
   for (size_t i = 0; i < v_s.size(); i++) {
-    std::cout << "s[" << i << "] = " << v_s[i] << std::endl;
+    if(v_s[i] < 0.5){
+      std::cout << "s[" << i << "] = " << v_s[i] << std::endl;
+    }
+    
   }
 
   return 0;
